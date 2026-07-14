@@ -1,6 +1,6 @@
-import { ChangeEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Building2, CheckCircle2, Clock3, Database, Download, FileUp, RefreshCw, Search, SlidersHorizontal, WalletCards, X } from "lucide-react";
-import { Catalogs, Filters, Purchase, PurchaseResponse, SyncStatus, fetchCatalogs, fetchPurchases, fetchSyncStatus, importFile, syncOfficialPurchases } from "../lib/api";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Building2, CheckCircle2, Clock3, Database, Download, Search, SlidersHorizontal, WalletCards, X } from "lucide-react";
+import { Catalogs, Filters, Purchase, PurchaseResponse, fetchCatalogs, fetchPurchases } from "../lib/api";
 
 const emptyResponse: PurchaseResponse = {
   items: [],
@@ -41,17 +41,10 @@ export function App() {
   const [data, setData] = useState<PurchaseResponse>(emptyResponse);
   const [catalogs, setCatalogs] = useState<Catalogs>({ agencies: [], agency_options: [], procedure_types: [], statuses: [] });
   const [selected, setSelected] = useState<Purchase | null>(null);
-  const [status, setStatus] = useState("Seleccione un organismo para sincronizar vigentes y adjudicadas.");
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [status, setStatus] = useState("Consulta de compras estatales por organismo.");
   const [loading, setLoading] = useState(false);
   const didInitialLoad = useRef(false);
-  const lastFinishedSync = useRef<string | null>(null);
-
   const selectedAgency = filters.agency === "all" ? "Todos los organismos" : filters.agency;
-  const canSyncAgency = filters.agency !== "all" && !loading && !syncStatus?.running;
-  const visibleStatus = syncStatus?.running
-    ? `${syncStatus.message} · ${syncStatus.processed} procesados, ${syncStatus.imported} nuevos, ${syncStatus.updated} actualizados`
-    : status;
 
   async function reload(nextFilters = filters) {
     setLoading(true);
@@ -71,30 +64,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadSyncStatus() {
-      try {
-        const nextStatus = await fetchSyncStatus();
-        if (!cancelled) setSyncStatus(nextStatus);
-        if (!cancelled && !nextStatus.running && nextStatus.finished_at && nextStatus.finished_at !== lastFinishedSync.current) {
-          lastFinishedSync.current = nextStatus.finished_at;
-          reload(filters);
-        }
-      } catch {
-        if (!cancelled) setSyncStatus(null);
-      }
-    }
-
-    loadSyncStatus();
-    const interval = window.setInterval(loadSyncStatus, 5000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [filters]);
-
-  useEffect(() => {
     if (!didInitialLoad.current) {
       didInitialLoad.current = true;
       return;
@@ -109,43 +78,6 @@ export function App() {
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
-  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setStatus(`Importando ${file.name}...`);
-    try {
-      await importFile(file);
-      setStatus(`${file.name} importado.`);
-      event.target.value = "";
-      await reload();
-    } catch (error) {
-      setStatus(errorMessage(error));
-    }
-  }
-
-  async function handleSyncAgency() {
-    if (filters.agency === "all") {
-      setStatus("Seleccione un organismo para sincronizar sus llamados.");
-      return;
-    }
-    const agencyOption = catalogs.agency_options.find((option) => option.label === filters.agency);
-    if (!agencyOption) {
-      setStatus("No se encontro el codigo ARCE del organismo seleccionado.");
-      return;
-    }
-    setStatus(`Sincronizacion historica 2023-hoy iniciada para ${filters.agency}.`);
-    try {
-      const result = await syncOfficialPurchases({ inciso: agencyOption.code, tipo_pub: "ALL", agency: filters.agency });
-      const nextFilters = { ...filters, status: "all" };
-      setFilters(nextFilters);
-      setStatus(result.message ?? `Organismo sincronizado: ${result.imported} nuevos, ${result.updated} actualizados.`);
-      const nextStatus = await fetchSyncStatus();
-      setSyncStatus(nextStatus);
-      await reload(nextFilters);
-    } catch (error) {
-      setStatus(errorMessage(error));
-    }
-  }
 
   function exportCsv() {
     const headers = ["expediente", "estado", "procedimiento", "organismo", "objeto", "proveedor", "fecha_adjudicacion", "moneda", "precio_adjudicado"];
@@ -179,16 +111,9 @@ export function App() {
               <span className="rounded-full bg-[#eef3ef] px-2 py-1 text-xs text-[#5b6b61]">ARCE en tiempo operativo</span>
             </div>
             <h1 className="mt-2 max-w-4xl text-3xl font-black tracking-normal text-[#111827] md:text-5xl">Compras estatales por organismo</h1>
-            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-muted" role="status" aria-live="polite">{visibleStatus}</p>
+            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-muted" role="status" aria-live="polite">{status}</p>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-[#0f766e] bg-[#0f766e] px-4 py-2 font-black text-white shadow-sm transition hover:bg-[#0b5f59]">
-              <FileUp size={18} /> Importar
-              <input className="sr-only" type="file" accept=".xml,.rss,.csv,text/csv,application/xml,text/xml" onChange={handleFile} />
-            </label>
-            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#0f766e] bg-white px-4 py-2 font-black text-[#0f766e] transition hover:bg-[#f1faf8] disabled:cursor-not-allowed disabled:opacity-55" type="button" onClick={handleSyncAgency} disabled={!canSyncAgency}>
-              <RefreshCw className={loading || syncStatus?.running ? "animate-spin" : ""} size={18} /> Sincronizar organismo
-            </button>
             <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#c8d3cc] bg-white px-4 py-2 font-black text-[#334155] transition hover:bg-[#f8faf8]" type="button" onClick={exportCsv}>
               <Download size={18} /> Exportar
             </button>
@@ -198,7 +123,7 @@ export function App() {
 
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 lg:px-10">
         <section className="grid gap-3 lg:grid-cols-[1.2fr_repeat(4,1fr)]" aria-label="Resumen">
-          <AgencyPanel agency={selectedAgency} total={data.total} canSync={canSyncAgency} loading={loading || Boolean(syncStatus?.running)} syncStatus={syncStatus} onSync={handleSyncAgency} />
+          <AgencyPanel agency={selectedAgency} total={data.total} />
           <Metric label="Vigentes" value={data.active} icon={<Activity size={19} />} tone="teal" />
           <Metric label="Pasadas" value={data.previous} icon={<Clock3 size={19} />} tone="slate" />
           <Metric label="Adjudicado UYU" value={money(data.awarded_total_uyu)} icon={<WalletCards size={19} />} tone="amber" />
@@ -209,13 +134,13 @@ export function App() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <p className="inline-flex items-center gap-2 text-sm font-black text-[#0f766e]"><SlidersHorizontal size={17} /> Panel de consulta</p>
-              <h2 id="filters-title" className="text-xl font-black text-[#111827]">Filtrar, sincronizar y comparar</h2>
+              <h2 id="filters-title" className="text-xl font-black text-[#111827]">Filtrar y comparar</h2>
             </div>
             <button className="hidden rounded-md border border-[#c8d3cc] px-3 py-2 text-sm font-black text-muted transition hover:bg-[#f8faf8] md:inline-flex" type="button" onClick={() => setFilters(defaultFilters)}>
               <X size={16} /> Limpiar
             </button>
           </div>
-          <div className="grid gap-3 lg:grid-cols-[1.35fr_repeat(3,1fr)_auto]">
+          <div className="grid gap-3 lg:grid-cols-[1.35fr_repeat(3,1fr)]">
             <label className="grid gap-1 text-sm font-black text-muted" htmlFor="query">
               Buscar
               <span className="relative">
@@ -226,9 +151,6 @@ export function App() {
             <Select label="Estado" value={filters.status} onChange={(value) => updateFilter("status", value)} options={["all", ...catalogs.statuses]} />
             <Select label="Organismo" value={filters.agency} onChange={(value) => updateFilter("agency", value)} options={["all", ...catalogs.agencies]} />
             <Select label="Procedimiento" value={filters.procedure_type} onChange={(value) => updateFilter("procedure_type", value)} options={["all", ...catalogs.procedure_types]} />
-            <button className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#17211b] px-4 py-2 font-black text-white transition hover:bg-[#0f1712] disabled:cursor-not-allowed disabled:bg-[#b7c4bc]" type="button" onClick={handleSyncAgency} disabled={!canSyncAgency}>
-              <RefreshCw className={loading || syncStatus?.running ? "animate-spin" : ""} size={18} /> Sincronizar
-            </button>
           </div>
         </section>
 
@@ -273,7 +195,7 @@ export function App() {
                 ))}
                 {!rows.length && (
                   <tr>
-                    <td className="h-40 p-3 text-center text-muted" colSpan={8}>Seleccione un organismo y sincronice para cargar vigentes y adjudicadas.</td>
+                    <td className="h-40 p-3 text-center text-muted" colSpan={8}>No hay compras para los filtros seleccionados.</td>
                   </tr>
                 )}
               </tbody>
@@ -287,23 +209,14 @@ export function App() {
   );
 }
 
-function AgencyPanel({ agency, total, canSync, loading, syncStatus, onSync }: { agency: string; total: number; canSync: boolean; loading: boolean; syncStatus: SyncStatus | null; onSync: () => void }) {
+function AgencyPanel({ agency, total }: { agency: string; total: number }) {
   return (
     <article className="rounded-lg border border-[#17211b] bg-[#17211b] p-4 text-white shadow-sm">
       <span className="inline-flex items-center gap-2 text-sm font-black text-[#a7f3d0]"><Building2 size={18} /> Organismo activo</span>
       <strong className="mt-2 block line-clamp-2 text-xl font-black leading-tight">{agency}</strong>
-      <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+      <div className="mt-4 text-sm">
         <span className="font-bold text-[#dbe7df]">{total} registros visibles</span>
-        <button className="rounded-md bg-white px-3 py-2 font-black text-[#17211b] transition hover:bg-[#f3f4f6] disabled:cursor-not-allowed disabled:opacity-50" type="button" onClick={onSync} disabled={!canSync}>
-          {loading ? "Trabajando" : "Actualizar"}
-        </button>
       </div>
-      {syncStatus?.running && (
-        <div className="mt-3 rounded-md border border-[#2f473b] bg-[#223329] p-3 text-xs font-bold text-[#dbe7df]" aria-live="polite">
-          <span className="inline-flex items-center gap-2 text-[#a7f3d0]"><RefreshCw className="animate-spin" size={14} /> Sincronizando ARCE</span>
-          <span className="mt-1 block">{syncStatus.processed} procesados · {syncStatus.imported} nuevos · {syncStatus.updated} actualizados</span>
-        </div>
-      )}
     </article>
   );
 }

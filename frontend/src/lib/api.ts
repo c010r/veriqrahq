@@ -60,18 +60,6 @@ export type ImportResult = {
   message?: string;
 };
 
-export type SyncStatus = {
-  running: boolean;
-  task: string;
-  message: string;
-  started_at: string | null;
-  finished_at: string | null;
-  processed: number;
-  imported: number;
-  updated: number;
-  error: string | null;
-};
-
 export type Filters = {
   query: string;
   status: string;
@@ -94,54 +82,5 @@ export async function fetchPurchases(filters: Filters): Promise<PurchaseResponse
 export async function fetchCatalogs(): Promise<Catalogs> {
   const response = await fetch(`${API_BASE}/api/purchases/catalogs`);
   if (!response.ok) throw new Error("No se pudieron cargar los catalogos.");
-  return response.json();
-}
-
-export async function fetchOfficialCatalog(): Promise<OfficialCatalogResponse> {
-  const response = await fetch(`${API_BASE}/api/catalogs/official`);
-  if (!response.ok) throw new Error("No se pudo cargar el catalogo oficial.");
-  return response.json();
-}
-
-export async function importFile(file: File): Promise<ImportResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("source", "ARCE");
-  const response = await fetch(`${API_BASE}/api/purchases/import`, {
-    method: "POST",
-    body: formData
-  });
-  if (!response.ok) throw new Error("No se pudo importar el archivo.");
-  return response.json();
-}
-
-export async function syncUrl(url: string): Promise<ImportResult> {
-  const formData = new FormData();
-  formData.append("url", url);
-  const response = await fetch(`${API_BASE}/api/purchases/sync-url`, {
-    method: "POST",
-    body: formData
-  });
-  if (!response.ok) throw new Error("No se pudo sincronizar la URL.");
-  return response.json();
-}
-
-
-export async function syncOfficialPurchases(options: { inciso?: string; tipo_pub?: string; agency?: string } = {}): Promise<ImportResult> {
-  const formData = new FormData();
-  formData.append("inciso", options.inciso ?? "29");
-  formData.append("tipo_pub", options.tipo_pub ?? "ALL");
-  if (options.agency) formData.append("agency", options.agency);
-  const response = await fetch(`${API_BASE}/api/purchases/sync-official`, {
-    method: "POST",
-    body: formData
-  });
-  if (!response.ok) throw new Error("No se pudo sincronizar el RSS oficial de ARCE.");
-  return response.json();
-}
-
-export async function fetchSyncStatus(): Promise<SyncStatus> {
-  const response = await fetch(`${API_BASE}/api/purchases/sync-status`);
-  if (!response.ok) throw new Error("No se pudo consultar el estado de sincronizacion.");
   return response.json();
 }
