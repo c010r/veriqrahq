@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -15,6 +15,7 @@ _DEFAULT_STATE: dict[str, Any] = {
     "message": "Sin sincronizaciones en curso.",
     "started_at": None,
     "finished_at": None,
+    "updated_at": None,
     "processed": 0,
     "imported": 0,
     "updated": 0,
@@ -30,7 +31,32 @@ def _load_state() -> dict[str, Any]:
         data = json.loads(_STATE_PATH.read_text())
     except (OSError, json.JSONDecodeError):
         return dict(_state)
-    return {**_DEFAULT_STATE, **data}
+    state = {**_DEFAULT_STATE, **data}
+    if _is_stale(state):
+        state.update(
+            running=False,
+            message="Sincronizacion anterior detenida o finalizada sin cierre registrado.",
+            finished_at=datetime.utcnow().isoformat(),
+            error="Estado de sincronizacion obsoleto",
+        )
+    return state
+
+
+def _is_stale(state: dict[str, Any]) -> bool:
+    if not state.get("running"):
+        return False
+    updated_at = state.get("updated_at") or state.get("started_at")
+    if not updated_at:
+        return True
+    try:
+        updated = datetime.fromisoformat(str(updated_at))
+    except ValueError:
+        return True
+    return datetime.utcnow() - updated > timedelta(minutes=15)
+
+
+def _touch() -> None:
+    _state["updated_at"] = datetime.utcnow().isoformat()
 
 
 def _save_state() -> None:
@@ -53,6 +79,7 @@ def start(task: str, message: str) -> None:
             message=message,
             started_at=datetime.utcnow().isoformat(),
             finished_at=None,
+            updated_at=datetime.utcnow().isoformat(),
             processed=0,
             imported=0,
             updated=0,
@@ -65,6 +92,7 @@ def progress(message: str, *, processed: int | None = None, imported: int | None
     with _lock:
         _state.update(_load_state())
         _state["message"] = message
+        _touch()
         if processed is not None:
             _state["processed"] = processed
         if imported is not None:
@@ -83,6 +111,7 @@ def finish(message: str, *, imported: int = 0, updated: int = 0, processed: int 
             imported=imported,
             updated=updated,
             finished_at=datetime.utcnow().isoformat(),
+            updated_at=datetime.utcnow().isoformat(),
             error=None,
         )
         if processed is not None:
@@ -98,6 +127,7 @@ def fail(message: str) -> None:
             message=message,
             error=message,
             finished_at=datetime.utcnow().isoformat(),
+            updated_at=datetime.utcnow().isoformat(),
         )
         _save_state()
 

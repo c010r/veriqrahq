@@ -117,6 +117,9 @@ async def sync_official(
     official_arce_rss_url("VIG", inciso)
     if tipo_pub.strip().upper() not in {"ALL", "TODOS"}:
         official_arce_rss_url(tipo_pub, inciso)
+    current_state = sync_state.get_state()
+    if current_state.get("running"):
+        return ImportResult(imported=0, updated=0, message="Ya hay una sincronizacion en curso")
     agency_label = agency or f"Inciso {inciso}"
     background_tasks.add_task(sync_history_for_agency, inciso, agency_label)
     return ImportResult(imported=0, updated=0, message="Sincronizacion historica de ultimos 3 anos iniciada")
