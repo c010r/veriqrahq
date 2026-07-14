@@ -1,9 +1,9 @@
 import asyncio
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.schemas.purchase import ImportResult, PurchaseList, PurchaseRead
 from app.services.catalog_service import items_for, labels_for
 from app.services.arce_parser import enrich_from_detail_html, parse_csv, parse_xml
@@ -100,44 +100,56 @@ async def sync_url(
     return ImportResult(imported=imported, updated=updated)
 
 
+async def collect_official_purchases(inciso: str, tipo_pub: str, agency: str, detail_limit: int):
+    requested_types = ["VIG", "ADJ"] if tipo_pub.strip().upper() in {"ALL", "TODOS"} else [tipo_pub.strip().upper()]
+    purchases = []
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        for publication_type in requested_types:
+            url = official_arce_rss_url(publication_type, inciso)
+            response = await client.get(url, headers=ARCE_HEADERS)
+            response.raise_for_status()
+            parsed = parse_xml(response.text, source=url)
+            if agency:
+                for item in parsed:
+                    item.agency = agency
+            if publication_type == "ADJ":
+                semaphore = asyncio.Semaphore(50)
+
+                async def enrich_item(item):
+                    if not item.source_url:
+                        return
+                    async with semaphore:
+                        try:
+                            detail_response = await client.get(item.source_url, headers=ARCE_HEADERS)
+                            detail_response.raise_for_status()
+                        except httpx.HTTPError:
+                            return
+                        enrich_from_detail_html(item, detail_response.text)
+
+                await asyncio.gather(*(enrich_item(item) for item in parsed[: max(detail_limit, 0)]))
+            purchases.extend(parsed)
+    return purchases
+
+
+async def sync_official_background(inciso: str, tipo_pub: str, agency: str, detail_limit: int) -> None:
+    db = SessionLocal()
+    try:
+        purchases = await collect_official_purchases(inciso, tipo_pub, agency, detail_limit)
+        upsert_purchases(db, purchases)
+    finally:
+        db.close()
+
+
 @router.post("/sync-official", response_model=ImportResult)
 async def sync_official(
-    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks,
     inciso: str = Form(default="29"),
     tipo_pub: str = Form(default="ALL"),
     agency: str = Form(default=""),
     detail_limit: int = Form(default=1000),
 ) -> ImportResult:
-    requested_types = ["VIG", "ADJ"] if tipo_pub.strip().upper() in {"ALL", "TODOS"} else [tipo_pub.strip().upper()]
-    purchases = []
-    try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            for publication_type in requested_types:
-                url = official_arce_rss_url(publication_type, inciso)
-                response = await client.get(url, headers=ARCE_HEADERS)
-                response.raise_for_status()
-                parsed = parse_xml(response.text, source=url)
-                if agency:
-                    for item in parsed:
-                        item.agency = agency
-                if publication_type == "ADJ":
-                    semaphore = asyncio.Semaphore(50)
-
-                    async def enrich_item(item):
-                        if not item.source_url:
-                            return
-                        async with semaphore:
-                            try:
-                                detail_response = await client.get(item.source_url, headers=ARCE_HEADERS)
-                                detail_response.raise_for_status()
-                            except httpx.HTTPError:
-                                return
-                            enrich_from_detail_html(item, detail_response.text)
-
-                    await asyncio.gather(*(enrich_item(item) for item in parsed[: max(detail_limit, 0)]))
-                purchases.extend(parsed)
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=400, detail=f"No se pudo obtener la fuente oficial ARCE: {exc}") from exc
-
-    imported, updated = upsert_purchases(db, purchases)
-    return ImportResult(imported=imported, updated=updated)
+    official_arce_rss_url("VIG", inciso)
+    if tipo_pub.strip().upper() not in {"ALL", "TODOS"}:
+        official_arce_rss_url(tipo_pub, inciso)
+    background_tasks.add_task(sync_official_background, inciso, tipo_pub, agency, detail_limit)
+    return ImportResult(imported=0, updated=0, message="Sincronizacion oficial iniciada")

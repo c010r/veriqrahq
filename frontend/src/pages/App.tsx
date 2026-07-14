@@ -106,8 +106,10 @@ export function App() {
       const result = await syncOfficialPurchases({ inciso: agencyOption.code, tipo_pub: "ALL", agency: filters.agency });
       const nextFilters = { ...filters, status: "all" };
       setFilters(nextFilters);
-      setStatus(`Organismo sincronizado: ${result.imported} nuevos, ${result.updated} actualizados.`);
+      setStatus(result.message ?? `Organismo sincronizado: ${result.imported} nuevos, ${result.updated} actualizados.`);
       await reload(nextFilters);
+      window.setTimeout(() => reload(nextFilters), 20000);
+      window.setTimeout(() => reload(nextFilters), 70000);
     } catch (error) {
       setStatus(errorMessage(error));
     }

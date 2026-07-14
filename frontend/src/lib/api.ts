@@ -56,6 +56,8 @@ export type OfficialCatalogResponse = {
 export type ImportResult = {
   imported: number;
   updated: number;
+  skipped?: number;
+  message?: string;
 };
 
 export type Filters = {
