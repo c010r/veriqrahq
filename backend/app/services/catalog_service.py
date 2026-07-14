@@ -131,7 +131,12 @@ async def sync_official_catalogs(db: Session) -> dict[str, int]:
 
             resource = db.scalar(select(CatalogResource).where(CatalogResource.slug == resource_data["slug"]))
             if not resource:
-                resource = CatalogResource(slug=resource_data["slug"], source_url=resource_data["url"])
+                resource = CatalogResource(
+                    slug=resource_data["slug"],
+                    name=resource_data["name"],
+                    description=resource_data["description"],
+                    source_url=resource_data["url"],
+                )
                 db.add(resource)
                 db.flush()
 
