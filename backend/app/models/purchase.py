@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import Date, DateTime, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, Numeric, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -12,7 +12,7 @@ class Purchase(Base):
     __tablename__ = "purchases"
     __table_args__ = (UniqueConstraint("external_id", name="uq_purchases_external_id"),)
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
     external_id: Mapped[str] = mapped_column(String(180), index=True)
     status: Mapped[str] = mapped_column(String(40), index=True)
     procedure_type: Mapped[str] = mapped_column(String(160), index=True)

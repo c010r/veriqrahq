@@ -108,7 +108,8 @@ def from_mapping(row: dict[str, object], fallback_id: str, source: str) -> Purch
     title = first(row, "objeto", "object", "titulo", "title", "descripcion", "description")
     description = first(row, "descripcion", "description", "detalle", "observaciones", "summary")
     procedure_from_title, agency_from_title, unit_from_title = split_arce_rss_title(title)
-    amount = parse_decimal(first(row, "precio_adjudicado", "precioAdjudicado", "montoAdjudicado", "monto", "importe", "total", "precio") or description)
+    amount_text = first(row, "precio_adjudicado", "precioAdjudicado", "montoAdjudicado", "monto", "importe", "total", "precio")
+    amount = parse_decimal(amount_text)
     unit_price = parse_decimal(first(row, "precio_unitario", "precioUnitario", "unitPrice")) or amount
     link = first(row, "link", "url", "source_url")
     external_id = first(row, "id", "guid", "expediente", "numero", "nroCompra", "codigo") or link or fallback_id
