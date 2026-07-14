@@ -15,8 +15,16 @@ from app.services.purchase_service import upsert_purchases
 
 ARCE_BASE = "https://www.comprasestatales.gub.uy"
 ARCE_HEADERS = {"User-Agent": "Mozilla/5.0"}
-HISTORY_START = date(2023, 1, 1)
+HISTORY_YEARS = 3
 _sync_lock = asyncio.Lock()
+
+
+def history_start(end: date | None = None) -> date:
+    end = end or date.today()
+    try:
+        return end.replace(year=end.year - HISTORY_YEARS)
+    except ValueError:
+        return end.replace(year=end.year - HISTORY_YEARS, day=28)
 
 
 def month_ranges(start: date, end: date):
@@ -90,35 +98,36 @@ async def sync_window(
     return imported, updated, processed
 
 
-async def sync_history_for_agency(inciso: str, agency: str, *, start: date = HISTORY_START, end: date | None = None) -> None:
-    end = end or date.today()
+async def _sync_history(agencies: list[tuple[str, str]], *, start: date, end: date, task_name: str) -> None:
     async with _sync_lock:
-        sync_state.start("history", f"Sincronizando historico 2023-hoy de {agency}...")
+        label = "todos los organismos" if len(agencies) > 1 else agencies[0][1]
+        sync_state.start(task_name, f"Sincronizando ultimos {HISTORY_YEARS} anos de {label}...")
         total_imported = 0
         total_updated = 0
         total_processed = 0
         db = SessionLocal()
         try:
             async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
-                for publication_type, label in (("ALL", "pedidos"), ("ADJ", "adjudicaciones")):
-                    for start_window, end_window in month_ranges(start, end):
-                        message = f"{agency}: {label} {start_window:%m/%Y}"
-                        sync_state.progress(message, processed=total_processed, imported=total_imported, updated=total_updated)
-                        next_imported, next_updated, next_processed = await sync_window(
-                            db,
-                            client,
-                            publication_type=publication_type,
-                            inciso=inciso,
-                            agency=agency,
-                            start=start_window,
-                            end=end_window,
-                            date_type="PUB",
-                        )
-                        total_imported += next_imported
-                        total_updated += next_updated
-                        total_processed += next_processed
+                for inciso, agency in agencies:
+                    for publication_type, publication_label in (("ALL", "pedidos"), ("ADJ", "adjudicaciones")):
+                        for start_window, end_window in month_ranges(start, end):
+                            message = f"{agency}: {publication_label} {start_window:%m/%Y}"
+                            sync_state.progress(message, processed=total_processed, imported=total_imported, updated=total_updated)
+                            next_imported, next_updated, next_processed = await sync_window(
+                                db,
+                                client,
+                                publication_type=publication_type,
+                                inciso=inciso,
+                                agency=agency,
+                                start=start_window,
+                                end=end_window,
+                                date_type="PUB",
+                            )
+                            total_imported += next_imported
+                            total_updated += next_updated
+                            total_processed += next_processed
             sync_state.finish(
-                f"Historico de {agency} sincronizado.",
+                f"Historico de ultimos {HISTORY_YEARS} anos sincronizado para {label}.",
                 imported=total_imported,
                 updated=total_updated,
                 processed=total_processed,
@@ -127,6 +136,21 @@ async def sync_history_for_agency(inciso: str, agency: str, *, start: date = HIS
             sync_state.fail(f"Fallo la sincronizacion historica: {exc}")
         finally:
             db.close()
+
+
+async def sync_history_for_agency(inciso: str, agency: str, *, start: date | None = None, end: date | None = None) -> None:
+    end = end or date.today()
+    await _sync_history([(inciso, agency)], start=start or history_start(end), end=end, task_name="history")
+
+
+async def sync_history_for_all_agencies(*, start: date | None = None, end: date | None = None) -> None:
+    end = end or date.today()
+    db = SessionLocal()
+    try:
+        agencies = active_agencies(db)
+    finally:
+        db.close()
+    await _sync_history(agencies, start=start or history_start(end), end=end, task_name="history_all")
 
 
 def active_agencies(db: Session) -> list[tuple[str, str]]:

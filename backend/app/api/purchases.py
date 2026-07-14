@@ -7,7 +7,7 @@ from app.schemas.purchase import ImportResult, PurchaseList
 from app.services.catalog_service import items_for, labels_for
 from app.services import sync_state
 from app.services.arce_parser import parse_csv, parse_xml
-from app.services.arce_sync import sync_history_for_agency
+from app.services.arce_sync import sync_history_for_agency, sync_history_for_all_agencies
 from app.services.purchase_service import distinct_values, list_purchases, metrics, upsert_purchases
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
@@ -119,4 +119,10 @@ async def sync_official(
         official_arce_rss_url(tipo_pub, inciso)
     agency_label = agency or f"Inciso {inciso}"
     background_tasks.add_task(sync_history_for_agency, inciso, agency_label)
-    return ImportResult(imported=0, updated=0, message="Sincronizacion historica 2023-hoy iniciada")
+    return ImportResult(imported=0, updated=0, message="Sincronizacion historica de ultimos 3 anos iniciada")
+
+
+@router.post("/sync-official-all", response_model=ImportResult)
+async def sync_official_all(background_tasks: BackgroundTasks) -> ImportResult:
+    background_tasks.add_task(sync_history_for_all_agencies)
+    return ImportResult(imported=0, updated=0, message="Carga historica de ultimos 3 anos para todos los organismos iniciada")
