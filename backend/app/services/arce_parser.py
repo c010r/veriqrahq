@@ -162,6 +162,68 @@ def enrich_from_detail_html(purchase: PurchaseCreate, html: str) -> PurchaseCrea
     return purchase
 
 
+def _first_match(pattern: str, text: str) -> str:
+    match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+    return clean_text(match.group(1)) if match else ""
+
+
+def parse_arce_results_html(text: str, source: str, publication_type: str) -> list[PurchaseCreate]:
+    items: list[PurchaseCreate] = []
+    blocks = re.findall(r'<div class="row item">(.*?)(?=<div class="row item">|<div id="pagination">|</div></div></div></div></div><footer)', text, flags=re.IGNORECASE | re.DOTALL)
+    for index, block in enumerate(blocks, start=1):
+        href = _first_match(r'<h3>\s*<a href="([^"]+)"', block)
+        title = _first_match(r'<h3>\s*<a[^>]*>(.*?)<span class="sr-only">', block) or _first_match(r'<h3>\s*<a[^>]*>(.*?)</a>', block)
+        agency_unit = _first_match(r'<div class="col-md-7 text-right ue-sniped">\s*<span class="text-muted">(.*?)</span>', block)
+        description = _first_match(r'<p class="buy-object">(.*?)</p>', block)
+        resolution = _first_match(r'<div class="col-md-3 text-right">(.*?)</div>', block)
+        closing_text = _first_match(r'Recepci[oó]n de ofertas hasta:</span>\s*&nbsp;\s*<strong>(.*?)</strong>', block)
+        purchase_date = _first_match(r'Fecha de Compra:\s*<strong>(.*?)</strong>', block)
+        amount_text = _first_match(r'Monto adjudicado:\s*&nbsp;\s*<strong>(.*?)</strong>', block)
+        published_text = _first_match(r'Publicado:&nbsp;(.*?)(?:\||</span>)', block)
+        procedure, agency_from_title, unit_from_title = split_arce_rss_title(f"{title} - {agency_unit}" if agency_unit and " - " not in title else title)
+        agency = agency_from_title
+        if not agency and agency_unit:
+            agency = agency_unit.split(" | ", 1)[0]
+        if not agency:
+            agency = "ARCE"
+        unit = unit_from_title or (agency_unit.split(" | ", 1)[1] if " | " in agency_unit else "")
+        link = f"https://www.comprasestatales.gub.uy{href}" if href.startswith("/") else href
+        is_award = publication_type.upper() == "ADJ" or bool(amount_text) or "adjudic" in normalize(resolution)
+        closing_date = parse_date(closing_text)
+        status = "anterior"
+        if not is_award and closing_date and closing_date >= date.today():
+            status = "vigente"
+        notes = description
+        if resolution:
+            notes = f"{notes}\nResolucion: {resolution}".strip()
+        if unit:
+            notes = f"{notes}\nUnidad ejecutora: {unit}".strip()
+        items.append(
+            PurchaseCreate(
+                external_id=link or f"HTML-{index}",
+                status=status,
+                procedure_type=procedure or title or "Publicacion ARCE",
+                agency=agency or "ARCE",
+                object=description or title or "Publicacion de Compras Estatales",
+                supplier="Sin proveedor informado",
+                award_date=parse_date(purchase_date or published_text),
+                closing_date=closing_date,
+                currency=infer_currency(amount_text),
+                awarded_amount=parse_decimal(amount_text),
+                quantity=Decimal("1"),
+                unit_price=parse_decimal(amount_text),
+                source=source,
+                source_url=link,
+                notes=notes,
+            )
+        )
+    return items
+
+
+def has_next_page(text: str) -> bool:
+    return bool(re.search(r'<a[^>]+class="next"[^>]+href=', text, flags=re.IGNORECASE)) or "Siguiente &gt;" in text
+
+
 def parse_csv(text: str, source: str = "CSV ARCE") -> list[PurchaseCreate]:
     reader = csv.DictReader(io.StringIO(text))
     return [from_mapping(dict(row), f"CSV-{index}", source) for index, row in enumerate(reader, start=1)]

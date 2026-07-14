@@ -60,6 +60,18 @@ export type ImportResult = {
   message?: string;
 };
 
+export type SyncStatus = {
+  running: boolean;
+  task: string;
+  message: string;
+  started_at: string | null;
+  finished_at: string | null;
+  processed: number;
+  imported: number;
+  updated: number;
+  error: string | null;
+};
+
 export type Filters = {
   query: string;
   status: string;
@@ -125,5 +137,11 @@ export async function syncOfficialPurchases(options: { inciso?: string; tipo_pub
     body: formData
   });
   if (!response.ok) throw new Error("No se pudo sincronizar el RSS oficial de ARCE.");
+  return response.json();
+}
+
+export async function fetchSyncStatus(): Promise<SyncStatus> {
+  const response = await fetch(`${API_BASE}/api/purchases/sync-status`);
+  if (!response.ok) throw new Error("No se pudo consultar el estado de sincronizacion.");
   return response.json();
 }
