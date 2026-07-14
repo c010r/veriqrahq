@@ -1,6 +1,6 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileUp, RefreshCw, Search } from "lucide-react";
-import { Catalogs, Filters, OfficialCatalogResource, Purchase, PurchaseResponse, fetchCatalogs, fetchOfficialCatalog, fetchPurchases, importFile, syncOfficialPurchases, syncUrl } from "../lib/api";
+import { Catalogs, Filters, Purchase, PurchaseResponse, fetchCatalogs, fetchPurchases, importFile, syncOfficialPurchases } from "../lib/api";
 
 const emptyResponse: PurchaseResponse = {
   items: [],
@@ -42,9 +42,7 @@ export function App() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [data, setData] = useState<PurchaseResponse>(emptyResponse);
   const [catalogs, setCatalogs] = useState<Catalogs>({ agencies: [], procedure_types: [], statuses: [] });
-  const [officialCatalog, setOfficialCatalog] = useState<OfficialCatalogResource[]>([]);
   const [selected, setSelected] = useState<Purchase | null>(null);
-  const [remoteUrl, setRemoteUrl] = useState("");
   const [status, setStatus] = useState("Listo para importar XML, RSS o CSV de ARCE.");
   const [loading, setLoading] = useState(false);
   const didInitialLoad = useRef(false);
@@ -52,10 +50,9 @@ export function App() {
   async function reload(nextFilters = filters) {
     setLoading(true);
     try {
-      const [purchases, nextCatalogs, official] = await Promise.all([fetchPurchases(nextFilters), fetchCatalogs(), fetchOfficialCatalog()]);
+      const [purchases, nextCatalogs] = await Promise.all([fetchPurchases(nextFilters), fetchCatalogs()]);
       setData(purchases);
       setCatalogs(nextCatalogs);
-      setOfficialCatalog(official.resources);
     } catch (error) {
       setStatus(errorMessage(error));
     } finally {
@@ -90,20 +87,6 @@ export function App() {
       await importFile(file);
       setStatus(`${file.name} importado.`);
       event.target.value = "";
-      await reload();
-    } catch (error) {
-      setStatus(errorMessage(error));
-    }
-  }
-
-  async function handleSync(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextUrl = remoteUrl.trim();
-    if (!nextUrl) return;
-    setStatus("Sincronizando URL oficial...");
-    try {
-      const result = await syncUrl(nextUrl);
-      setStatus(`Sincronizacion finalizada: ${result.imported} nuevos, ${result.updated} actualizados.`);
       await reload();
     } catch (error) {
       setStatus(errorMessage(error));
@@ -152,12 +135,16 @@ export function App() {
           <div>
             <p className="text-sm font-extrabold text-accent">VeriqraHQ</p>
             <h1 className="text-4xl font-black tracking-normal md:text-5xl">Compras estatales</h1>
+            <p className="mt-1 text-sm text-muted" role="status" aria-live="polite">{status}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-accent bg-accent px-4 py-2 font-bold text-white">
               <FileUp size={18} /> Importar archivo
               <input className="sr-only" type="file" accept=".xml,.rss,.csv,text/csv,application/xml,text/xml" onChange={handleFile} />
             </label>
+            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={handleSyncAsse} disabled={loading}>
+              <RefreshCw size={18} /> ASSE vigentes
+            </button>
             <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={exportCsv}>
               <Download size={18} /> Exportar
             </button>
@@ -171,56 +158,6 @@ export function App() {
           <Metric label="Anteriores" value={data.previous} />
           <Metric label="Total UYU adjudicado" value={money(data.awarded_total_uyu)} />
           <Metric label="Promedio UYU" value={money(data.awarded_average_uyu)} />
-        </section>
-
-        <section className="grid gap-4 rounded-lg border border-line bg-white p-4 shadow-sm lg:grid-cols-[1.2fr_0.8fr]">
-          <div>
-            <p className="text-sm font-extrabold text-accent">Fuente oficial</p>
-            <h2 className="text-xl font-black">ARCE - Catálogo de Datos Abiertos</h2>
-            <p className="mt-2 max-w-3xl text-sm text-muted">
-              Primera versión orientada al conjunto “Publicaciones realizadas en el sitio web de Compras Estatales”.
-              Puede importar XML/RSS/CSV descargado desde el catálogo o sincronizar una URL RSS del buscador.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <a className="rounded-md border border-line px-3 py-2 text-sm font-bold text-accent" href="https://catalogodatos.gub.uy/dataset/acce-compras-estatales" target="_blank" rel="noreferrer">Dataset oficial</a>
-              <a className="rounded-md border border-line px-3 py-2 text-sm font-bold text-accent" href="https://catalogodatos.gub.uy/dataset/acce-compras-estatales" target="_blank" rel="noreferrer">Interfaz XML y RSS</a>
-            </div>
-          </div>
-          <form className="grid content-start gap-2" method="post" action="/api/purchases/sync-url" onSubmit={handleSync}>
-            <label className="grid gap-1 text-sm font-bold text-muted" htmlFor="remote-url">
-              URL XML/RSS
-              <input id="remote-url" name="url" className="min-h-11 rounded-md border border-line px-3 text-ink" type="url" value={remoteUrl} onChange={(event) => setRemoteUrl(event.target.value)} placeholder="https://..." required />
-            </label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 font-bold text-white" type="submit">
-                <RefreshCw size={18} /> Sincronizar URL
-              </button>
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={handleSyncAsse} disabled={loading}>
-                <RefreshCw size={18} /> ASSE vigentes
-              </button>
-            </div>
-            <p className="text-sm text-muted" role="status" aria-live="polite">{status}</p>
-          </form>
-        </section>
-
-        <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-sm font-extrabold text-accent">Catálogo oficial ARCE cargado</p>
-              <h2 className="text-xl font-black">{officialCatalog.length} codigueras disponibles</h2>
-            </div>
-            <p className="text-sm text-muted">
-              {officialCatalog.reduce((sum, resource) => sum + resource.item_count, 0)} registros oficiales
-            </p>
-          </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            {officialCatalog.map((resource) => (
-              <article className="rounded-md border border-line p-3" key={resource.slug}>
-                <h3 className="text-sm font-black">{resource.name}</h3>
-                <p className="mt-1 text-sm text-muted">{resource.item_count} registros</p>
-              </article>
-            ))}
-          </div>
         </section>
 
         <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
