@@ -114,6 +114,8 @@ def from_mapping(row: dict[str, object], fallback_id: str, source: str) -> Purch
     link = first(row, "link", "url", "source_url")
     external_id = first(row, "id", "guid", "expediente", "numero", "nroCompra", "codigo") or link or fallback_id
     agency = first(row, "organismo", "agency", "inciso", "unidadEjecutora", "unidad_ejecutora", "author") or agency_from_title or "ARCE"
+    if "/inciso/29" in source:
+        agency = "Administración de Servicios de Salud del Estado"
     procedure_type = first(row, "procedimiento", "procedure", "tipoCompra", "tipo_compra", "categoria") or procedure_from_title or "Publicacion ARCE"
     object_text = description.split(" Recepción de ofertas hasta:", 1)[0].strip() or procedure_from_title or title or "Publicacion de Compras Estatales"
     notes = description
