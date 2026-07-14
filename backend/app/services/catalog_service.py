@@ -185,3 +185,9 @@ def labels_for(db: Session, resource_slug: str) -> list[str]:
 def items_for(db: Session, resource_slug: str) -> list[CatalogItem]:
     statement = select(CatalogItem).where(CatalogItem.resource_slug == resource_slug).order_by(CatalogItem.label)
     return list(db.scalars(statement).all())
+
+def item_label_for_code(db: Session, resource_slug: str, code: str) -> str:
+    if not code or code == "all":
+        return ""
+    statement = select(CatalogItem.label).where(CatalogItem.resource_slug == resource_slug, CatalogItem.code == code)
+    return db.scalar(statement) or ""

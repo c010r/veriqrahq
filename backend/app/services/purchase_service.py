@@ -31,6 +31,8 @@ def list_purchases(
     status: str = "all",
     agency: str = "all",
     procedure_type: str = "all",
+    currency: str = "all",
+    unit: str = "all",
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[Purchase], int]:
@@ -46,7 +48,11 @@ def list_purchases(
     if agency != "all":
         filters.append(Purchase.agency == agency)
     if procedure_type != "all":
-        filters.append(Purchase.procedure_type == procedure_type)
+        filters.append(Purchase.procedure_type.ilike(f"{procedure_type}%"))
+    if currency != "all":
+        filters.append(Purchase.currency == currency)
+    if unit != "all":
+        filters.append(Purchase.notes.ilike(f"%Unidad ejecutora: {unit}%"))
 
     for condition in filters:
         statement = statement.where(condition)

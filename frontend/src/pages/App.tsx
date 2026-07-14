@@ -15,7 +15,11 @@ const defaultFilters: Filters = {
   query: "",
   status: "all",
   agency: "all",
-  procedure_type: "all"
+  procedure_type: "all",
+  agency_code: "all",
+  procedure_type_code: "all",
+  currency_code: "all",
+  unit_code: "all"
 };
 
 function money(value: string | number, currency = "UYU") {
@@ -39,12 +43,12 @@ function errorMessage(error: unknown) {
 export function App() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [data, setData] = useState<PurchaseResponse>(emptyResponse);
-  const [catalogs, setCatalogs] = useState<Catalogs>({ agencies: [], agency_options: [], procedure_types: [], statuses: [] });
+  const [catalogs, setCatalogs] = useState<Catalogs>({ agencies: [], agency_options: [], procedure_types: [], procedure_type_options: [], currency_options: [], unit_options: [], statuses: [] });
   const [selected, setSelected] = useState<Purchase | null>(null);
   const [status, setStatus] = useState("Consulta de compras estatales por organismo.");
   const [loading, setLoading] = useState(false);
   const didInitialLoad = useRef(false);
-  const selectedAgency = filters.agency === "all" ? "Todos los organismos" : filters.agency;
+  const selectedAgency = filters.agency_code === "all" ? "Todos los organismos" : catalogs.agency_options.find((option) => option.code === filters.agency_code)?.label ?? "Organismo";
 
   async function reload(nextFilters = filters) {
     setLoading(true);
@@ -140,7 +144,7 @@ export function App() {
               <X size={16} /> Limpiar
             </button>
           </div>
-          <div className="grid gap-3 lg:grid-cols-[1.35fr_repeat(3,1fr)]">
+          <div className="grid gap-3 lg:grid-cols-[1.35fr_repeat(5,1fr)]">
             <label className="grid gap-1 text-sm font-black text-muted" htmlFor="query">
               Buscar
               <span className="relative">
@@ -149,8 +153,10 @@ export function App() {
               </span>
             </label>
             <Select label="Estado" value={filters.status} onChange={(value) => updateFilter("status", value)} options={["all", ...catalogs.statuses]} />
-            <Select label="Organismo" value={filters.agency} onChange={(value) => updateFilter("agency", value)} options={["all", ...catalogs.agencies]} />
-            <Select label="Procedimiento" value={filters.procedure_type} onChange={(value) => updateFilter("procedure_type", value)} options={["all", ...catalogs.procedure_types]} />
+            <OptionSelect label="Organismo" value={filters.agency_code} onChange={(value) => updateFilter("agency_code", value)} options={catalogs.agency_options} />
+            <OptionSelect label="Tipo de compra" value={filters.procedure_type_code} onChange={(value) => updateFilter("procedure_type_code", value)} options={catalogs.procedure_type_options} />
+            <OptionSelect label="Moneda" value={filters.currency_code} onChange={(value) => updateFilter("currency_code", value)} options={catalogs.currency_options} />
+            <OptionSelect label="Unidad ejecutora" value={filters.unit_code} onChange={(value) => updateFilter("unit_code", value)} options={catalogs.unit_options} />
           </div>
         </section>
 
@@ -158,7 +164,7 @@ export function App() {
           <div className="flex flex-col gap-2 border-b border-[#d6dfd9] bg-[#fbfcfb] p-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 id="results-title" className="text-xl font-black text-[#111827]">Resultados</h2>
-              <p className="text-sm font-medium text-muted" aria-live="polite">{loading ? "Cargando..." : `${data.total} compras encontradas${filters.agency === "all" ? "" : ` para ${filters.agency}`}`}</p>
+              <p className="text-sm font-medium text-muted" aria-live="polite">{loading ? "Cargando..." : `${data.total} compras encontradas${filters.agency_code === "all" ? "" : ` para ${selectedAgency}`}`}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs font-black text-muted">
               <span className="rounded-full border border-[#d6dfd9] bg-white px-3 py-1">Estado: {filters.status === "all" ? "Todos" : filters.status}</span>
@@ -244,6 +250,20 @@ function Select({ label, value, options, onChange }: { label: string; value: str
       <select className="min-h-11 rounded-md border border-[#c8d3cc] bg-white px-3 text-ink shadow-inner shadow-black/[0.02]" value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={option} value={option}>{option === "all" ? "Todos" : option}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function OptionSelect({ label, value, options, onChange }: { label: string; value: string; options: { code: string; label: string }[]; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-1 text-sm font-black text-muted">
+      {label}
+      <select className="min-h-11 rounded-md border border-[#c8d3cc] bg-white px-3 text-ink shadow-inner shadow-black/[0.02]" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="all">Todos</option>
+        {options.map((option) => (
+          <option key={option.code} value={option.code}>{option.label}</option>
         ))}
       </select>
     </label>

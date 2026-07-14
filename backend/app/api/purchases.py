@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.purchase import ImportResult, PurchaseList
-from app.services.catalog_service import items_for, labels_for
+from app.services.catalog_service import item_label_for_code, items_for, labels_for
 from app.services import sync_state
 from app.services.arce_parser import parse_csv, parse_xml
 from app.services.arce_sync import sync_history_for_agency
@@ -34,15 +34,25 @@ def get_purchases(
     status: str = "all",
     agency: str = "all",
     procedure_type: str = "all",
+    agency_code: str = "all",
+    procedure_type_code: str = "all",
+    currency_code: str = "all",
+    unit_code: str = "all",
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> PurchaseList:
+    agency_filter = item_label_for_code(db, "incisos", agency_code) or agency
+    procedure_filter = item_label_for_code(db, "tipos_compra", procedure_type_code) or procedure_type
+    unit_filter = item_label_for_code(db, "unidades_ejecutoras", unit_code) or "all"
+    currency_filter = currency_code if currency_code != "all" else "all"
     items, total = list_purchases(
         db,
         query=query,
         status=status,
-        agency=agency,
-        procedure_type=procedure_type,
+        agency=agency_filter,
+        procedure_type=procedure_filter,
+        currency=currency_filter,
+        unit=unit_filter,
         limit=limit,
         offset=offset,
     )
@@ -57,10 +67,16 @@ def get_catalogs(db: Session = Depends(get_db)) -> dict[str, object]:
     agencies = sorted(set(official_agencies) | set(distinct_values(db, "agency")))
     procedure_types = sorted(set(official_procedure_types) | set(distinct_values(db, "procedure_type")))
     agency_options = [{"code": item.code, "label": item.label} for item in items_for(db, "incisos")]
+    procedure_type_options = [{"code": item.code, "label": item.label} for item in items_for(db, "tipos_compra")]
+    currency_options = [{"code": item.attrs.get("sigla") or item.code, "label": item.label} for item in items_for(db, "monedas")]
+    unit_options = [{"code": item.code, "label": item.label} for item in items_for(db, "unidades_ejecutoras")]
     return {
         "agencies": agencies,
         "agency_options": agency_options,
         "procedure_types": procedure_types,
+        "procedure_type_options": procedure_type_options,
+        "currency_options": currency_options,
+        "unit_options": unit_options,
         "statuses": ["vigente", "anterior"],
     }
 

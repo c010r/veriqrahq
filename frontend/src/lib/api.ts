@@ -37,6 +37,9 @@ export type Catalogs = {
   agencies: string[];
   agency_options: CatalogOption[];
   procedure_types: string[];
+  procedure_type_options: CatalogOption[];
+  currency_options: CatalogOption[];
+  unit_options: CatalogOption[];
   statuses: string[];
 };
 
@@ -65,6 +68,10 @@ export type Filters = {
   status: string;
   agency: string;
   procedure_type: string;
+  agency_code: string;
+  procedure_type_code: string;
+  currency_code: string;
+  unit_code: string;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
