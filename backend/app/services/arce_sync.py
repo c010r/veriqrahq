@@ -15,16 +15,12 @@ from app.services.purchase_service import upsert_purchases
 
 ARCE_BASE = "https://www.comprasestatales.gub.uy"
 ARCE_HEADERS = {"User-Agent": "Mozilla/5.0"}
-HISTORY_YEARS = 3
+HISTORY_START = date(2024, 1, 1)
 _sync_lock = asyncio.Lock()
 
 
 def history_start(end: date | None = None) -> date:
-    end = end or date.today()
-    try:
-        return end.replace(year=end.year - HISTORY_YEARS)
-    except ValueError:
-        return end.replace(year=end.year - HISTORY_YEARS, day=28)
+    return HISTORY_START
 
 
 def month_ranges(start: date, end: date):
@@ -101,7 +97,7 @@ async def sync_window(
 async def _sync_history(agencies: list[tuple[str, str]], *, start: date, end: date, task_name: str) -> None:
     async with _sync_lock:
         label = "todos los organismos" if len(agencies) > 1 else agencies[0][1]
-        sync_state.start(task_name, f"Sincronizando ultimos {HISTORY_YEARS} anos de {label}...")
+        sync_state.start(task_name, f"Sincronizando datos desde {HISTORY_START:%d/%m/%Y} de {label}...")
         total_imported = 0
         total_updated = 0
         total_processed = 0
@@ -127,7 +123,7 @@ async def _sync_history(agencies: list[tuple[str, str]], *, start: date, end: da
                             total_updated += next_updated
                             total_processed += next_processed
             sync_state.finish(
-                f"Historico de ultimos {HISTORY_YEARS} anos sincronizado para {label}.",
+                f"Historico desde {HISTORY_START:%d/%m/%Y} sincronizado para {label}.",
                 imported=total_imported,
                 updated=total_updated,
                 processed=total_processed,

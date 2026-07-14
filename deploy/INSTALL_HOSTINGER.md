@@ -69,7 +69,7 @@ npm run build
 
 ## 6.1 Carga inicial ARCE
 
-La carga historica de los ultimos 3 anos se ejecuta desde el servidor, no desde la interfaz web:
+La carga historica desde el 01/01/2024 hasta la fecha se ejecuta desde el servidor, no desde la interfaz web:
 
 ```sh
 cd /var/www/veriqrahq/backend

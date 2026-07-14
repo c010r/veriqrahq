@@ -138,4 +138,4 @@ async def sync_official(
         return ImportResult(imported=0, updated=0, message="Ya hay una sincronizacion en curso")
     agency_label = agency or f"Inciso {inciso}"
     background_tasks.add_task(sync_history_for_agency, inciso, agency_label)
-    return ImportResult(imported=0, updated=0, message="Sincronizacion historica de ultimos 3 anos iniciada")
+    return ImportResult(imported=0, updated=0, message="Sincronizacion historica desde 01/01/2024 iniciada")
