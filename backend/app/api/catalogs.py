@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from xml.etree.ElementTree import ParseError
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -22,4 +25,9 @@ def get_official_catalog(
 
 @router.post("/official/sync")
 async def sync_official_catalog(db: Session = Depends(get_db)) -> dict[str, int]:
-    return await sync_official_catalogs(db)
+    try:
+        return await sync_official_catalogs(db)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudieron sincronizar las codigueras ARCE: {exc}") from exc
+    except ParseError as exc:
+        raise HTTPException(status_code=502, detail="ARCE devolvio una codiguera con XML invalido.") from exc

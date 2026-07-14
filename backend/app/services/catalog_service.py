@@ -116,7 +116,14 @@ def parse_catalog_xml(content: bytes) -> list[dict]:
 
 async def sync_official_catalogs(db: Session) -> dict[str, int]:
     total = 0
-    async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=45,
+        follow_redirects=True,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; VeriqraHQ/1.0; +https://test.veriqrahq.pro)",
+            "Accept": "application/xml,text/xml,*/*",
+        },
+    ) as client:
         for resource_data in ARCE_CATALOG_RESOURCES:
             response = await client.get(resource_data["url"])
             response.raise_for_status()
