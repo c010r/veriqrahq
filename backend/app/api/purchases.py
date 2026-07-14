@@ -121,7 +121,7 @@ async def sync_official(
                     for item in parsed:
                         item.agency = agency
                 if publication_type == "ADJ":
-                    semaphore = asyncio.Semaphore(12)
+                    semaphore = asyncio.Semaphore(50)
 
                     async def enrich_item(item):
                         if not item.source_url:
