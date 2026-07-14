@@ -141,6 +141,27 @@ def from_mapping(row: dict[str, object], fallback_id: str, source: str) -> Purch
     )
 
 
+def enrich_from_detail_html(purchase: PurchaseCreate, html: str) -> PurchaseCreate:
+    amount_match = re.search(r"Monto Total de la Compra:\s*</li>\s*<li[^>]*>\s*<strong>(.*?)</strong>", html, flags=re.IGNORECASE | re.DOTALL)
+    if amount_match:
+        purchase.awarded_amount = parse_decimal(amount_match.group(1))
+        purchase.unit_price = purchase.awarded_amount
+
+    date_match = re.search(r"Fecha de Compra:\s*</li>\s*<li[^>]*>\s*<strong>(.*?)</strong>", html, flags=re.IGNORECASE | re.DOTALL)
+    if date_match:
+        purchase.award_date = parse_date(date_match.group(1)) or purchase.award_date
+
+    providers = []
+    for provider in re.findall(r'class="provider-name"[^>]*>.*?<strong>(.*?)</strong>', html, flags=re.IGNORECASE | re.DOTALL):
+        label = clean_text(provider)
+        if label and label not in providers:
+            providers.append(label)
+    if providers:
+        purchase.supplier = ", ".join(providers[:3])
+
+    return purchase
+
+
 def parse_csv(text: str, source: str = "CSV ARCE") -> list[PurchaseCreate]:
     reader = csv.DictReader(io.StringIO(text))
     return [from_mapping(dict(row), f"CSV-{index}", source) for index, row in enumerate(reader, start=1)]

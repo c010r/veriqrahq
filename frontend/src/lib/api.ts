@@ -28,8 +28,14 @@ export type PurchaseResponse = {
   awarded_average_uyu: string;
 };
 
+export type CatalogOption = {
+  code: string;
+  label: string;
+};
+
 export type Catalogs = {
   agencies: string[];
+  agency_options: CatalogOption[];
   procedure_types: string[];
   statuses: string[];
 };
@@ -107,10 +113,11 @@ export async function syncUrl(url: string): Promise<ImportResult> {
 }
 
 
-export async function syncOfficialPurchases(options: { inciso?: string; tipo_pub?: string } = {}): Promise<ImportResult> {
+export async function syncOfficialPurchases(options: { inciso?: string; tipo_pub?: string; agency?: string } = {}): Promise<ImportResult> {
   const formData = new FormData();
   formData.append("inciso", options.inciso ?? "29");
-  formData.append("tipo_pub", options.tipo_pub ?? "VIG");
+  formData.append("tipo_pub", options.tipo_pub ?? "ALL");
+  if (options.agency) formData.append("agency", options.agency);
   const response = await fetch(`${API_BASE}/api/purchases/sync-official`, {
     method: "POST",
     body: formData

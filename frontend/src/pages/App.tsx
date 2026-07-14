@@ -18,8 +18,6 @@ const defaultFilters: Filters = {
   procedure_type: "all"
 };
 
-const ASSE_AGENCY = "Administración de Servicios de Salud del Estado";
-
 function money(value: string | number, currency = "UYU") {
   return new Intl.NumberFormat("es-UY", {
     style: "currency",
@@ -41,7 +39,7 @@ function errorMessage(error: unknown) {
 export function App() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [data, setData] = useState<PurchaseResponse>(emptyResponse);
-  const [catalogs, setCatalogs] = useState<Catalogs>({ agencies: [], procedure_types: [], statuses: [] });
+  const [catalogs, setCatalogs] = useState<Catalogs>({ agencies: [], agency_options: [], procedure_types: [], statuses: [] });
   const [selected, setSelected] = useState<Purchase | null>(null);
   const [status, setStatus] = useState("Listo para importar XML, RSS o CSV de ARCE.");
   const [loading, setLoading] = useState(false);
@@ -93,14 +91,23 @@ export function App() {
     }
   }
 
-  async function handleSyncAsse() {
-    setStatus("Sincronizando llamados vigentes de ASSE desde ARCE...");
+  async function handleSyncAgency() {
+    if (filters.agency === "all") {
+      setStatus("Seleccione un organismo para sincronizar sus llamados.");
+      return;
+    }
+    const agencyOption = catalogs.agency_options.find((option) => option.label === filters.agency);
+    if (!agencyOption) {
+      setStatus("No se encontro el codigo ARCE del organismo seleccionado.");
+      return;
+    }
+    setStatus(`Sincronizando vigentes y adjudicadas de ${filters.agency}...`);
     try {
-      const result = await syncOfficialPurchases({ inciso: "29", tipo_pub: "VIG" });
-      const asseFilters = { ...filters, status: "vigente", agency: ASSE_AGENCY };
-      setFilters(asseFilters);
-      setStatus(`ASSE vigente sincronizado: ${result.imported} nuevos, ${result.updated} actualizados.`);
-      await reload(asseFilters);
+      const result = await syncOfficialPurchases({ inciso: agencyOption.code, tipo_pub: "ALL", agency: filters.agency });
+      const nextFilters = { ...filters, status: "all" };
+      setFilters(nextFilters);
+      setStatus(`Organismo sincronizado: ${result.imported} nuevos, ${result.updated} actualizados.`);
+      await reload(nextFilters);
     } catch (error) {
       setStatus(errorMessage(error));
     }
@@ -142,8 +149,8 @@ export function App() {
               <FileUp size={18} /> Importar archivo
               <input className="sr-only" type="file" accept=".xml,.rss,.csv,text/csv,application/xml,text/xml" onChange={handleFile} />
             </label>
-            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={handleSyncAsse} disabled={loading}>
-              <RefreshCw size={18} /> ASSE vigentes
+            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={handleSyncAgency} disabled={loading}>
+              <RefreshCw size={18} /> Sincronizar organismo
             </button>
             <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={exportCsv}>
               <Download size={18} /> Exportar
@@ -161,7 +168,7 @@ export function App() {
         </section>
 
         <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[1.6fr_repeat(3,1fr)]">
+          <div className="grid gap-3 lg:grid-cols-[1.4fr_repeat(3,1fr)_auto]">
             <label className="grid gap-1 text-sm font-bold text-muted">
               Buscar
               <span className="relative">
@@ -172,6 +179,9 @@ export function App() {
             <Select label="Estado" value={filters.status} onChange={(value) => updateFilter("status", value)} options={["all", ...catalogs.statuses]} />
             <Select label="Organismo" value={filters.agency} onChange={(value) => updateFilter("agency", value)} options={["all", ...catalogs.agencies]} />
             <Select label="Procedimiento" value={filters.procedure_type} onChange={(value) => updateFilter("procedure_type", value)} options={["all", ...catalogs.procedure_types]} />
+            <button className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={handleSyncAgency} disabled={loading || filters.agency === "all"}>
+              <RefreshCw size={18} /> Sincronizar
+            </button>
           </div>
         </section>
 
