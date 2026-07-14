@@ -104,12 +104,15 @@ def _code_from_attrs(attrs: dict[str, str], index: int) -> str:
 def parse_catalog_xml(content: bytes) -> list[dict]:
     root = ET.fromstring(content)
     items = []
+    seen_codes: dict[str, int] = {}
     for index, node in enumerate(list(root), start=1):
         attrs = {key: value for key, value in node.attrib.items()}
         if node.text and node.text.strip():
             attrs[_local_name(node.tag)] = node.text.strip()
-        code = _code_from_attrs(attrs, index)
-        label = _label_from_attrs(attrs) or code
+        base_code = _code_from_attrs(attrs, index)
+        seen_codes[base_code] = seen_codes.get(base_code, 0) + 1
+        code = base_code if seen_codes[base_code] == 1 else f"{base_code}__{seen_codes[base_code]}"
+        label = _label_from_attrs(attrs) or base_code
         items.append({"code": code, "label": label, "attrs": attrs})
     return items
 
