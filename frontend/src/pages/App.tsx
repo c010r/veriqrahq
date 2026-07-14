@@ -1,6 +1,6 @@
 import { ChangeEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, Building2, CheckCircle2, Clock3, Database, Download, FileUp, RefreshCw, Search, SlidersHorizontal, WalletCards, X } from "lucide-react";
-import { Catalogs, Filters, Purchase, PurchaseResponse, SyncStatus, fetchCatalogs, fetchPurchases, fetchSyncStatus, importFile, syncAllOfficialPurchases, syncOfficialPurchases } from "../lib/api";
+import { Catalogs, Filters, Purchase, PurchaseResponse, SyncStatus, fetchCatalogs, fetchPurchases, fetchSyncStatus, importFile, syncOfficialPurchases } from "../lib/api";
 
 const emptyResponse: PurchaseResponse = {
   items: [],
@@ -123,18 +123,6 @@ export function App() {
     }
   }
 
-  async function handleSyncAll() {
-    setStatus("Carga historica de ultimos 3 anos para todos los organismos iniciada.");
-    try {
-      const result = await syncAllOfficialPurchases();
-      setStatus(result.message ?? "Carga historica iniciada.");
-      const nextStatus = await fetchSyncStatus();
-      setSyncStatus(nextStatus);
-    } catch (error) {
-      setStatus(errorMessage(error));
-    }
-  }
-
   async function handleSyncAgency() {
     if (filters.agency === "all") {
       setStatus("Seleccione un organismo para sincronizar sus llamados.");
@@ -200,9 +188,6 @@ export function App() {
             </label>
             <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#0f766e] bg-white px-4 py-2 font-black text-[#0f766e] transition hover:bg-[#f1faf8] disabled:cursor-not-allowed disabled:opacity-55" type="button" onClick={handleSyncAgency} disabled={!canSyncAgency}>
               <RefreshCw className={loading || syncStatus?.running ? "animate-spin" : ""} size={18} /> Sincronizar organismo
-            </button>
-            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#17211b] bg-[#17211b] px-4 py-2 font-black text-white transition hover:bg-[#0f1712] disabled:cursor-not-allowed disabled:opacity-55" type="button" onClick={handleSyncAll} disabled={loading || Boolean(syncStatus?.running)}>
-              <Database size={18} /> Cargar BD 3 anos
             </button>
             <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#c8d3cc] bg-white px-4 py-2 font-black text-[#334155] transition hover:bg-[#f8faf8]" type="button" onClick={exportCsv}>
               <Download size={18} /> Exportar

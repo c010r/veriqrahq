@@ -67,6 +67,18 @@ npm install
 npm run build
 ```
 
+## 6.1 Carga inicial ARCE
+
+La carga historica de los ultimos 3 anos se ejecuta desde el servidor, no desde la interfaz web:
+
+```sh
+cd /var/www/veriqrahq/backend
+. .venv/bin/activate
+PYTHONPATH=/var/www/veriqrahq/backend nohup python scripts/load_arce_history.py > /var/log/veriqrahq-arce-history.log 2>&1 &
+```
+
+El progreso queda visible en `/api/purchases/sync-status` y en la pantalla principal.
+
 `VITE_API_BASE` puede quedar vacio porque Nginx sirve frontend y API bajo el mismo dominio.
 
 ## 7. Nginx

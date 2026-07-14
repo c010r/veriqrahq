@@ -159,7 +159,11 @@ def active_agencies(db: Session) -> list[tuple[str, str]]:
 
 
 async def sync_recent(publication_type: str, *, hours: int, label: str) -> None:
+    if sync_state.get_state().get("running"):
+        return
     async with _sync_lock:
+        if sync_state.get_state().get("running"):
+            return
         end = datetime.utcnow().date()
         start = (datetime.utcnow() - timedelta(hours=hours)).date()
         sync_state.start(label, f"Sincronizando {label} de las ultimas {hours} horas...")

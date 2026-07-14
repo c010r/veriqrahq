@@ -145,11 +145,3 @@ export async function fetchSyncStatus(): Promise<SyncStatus> {
   if (!response.ok) throw new Error("No se pudo consultar el estado de sincronizacion.");
   return response.json();
 }
-
-export async function syncAllOfficialPurchases(): Promise<ImportResult> {
-  const response = await fetch(`${API_BASE}/api/purchases/sync-official-all`, {
-    method: "POST"
-  });
-  if (!response.ok) throw new Error("No se pudo iniciar la carga historica oficial de ARCE.");
-  return response.json();
-}
