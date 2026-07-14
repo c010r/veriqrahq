@@ -151,7 +151,7 @@ export function App() {
               <FileUp size={18} /> Importar archivo
               <input className="sr-only" type="file" accept=".xml,.rss,.csv,text/csv,application/xml,text/xml" onChange={handleFile} />
             </label>
-            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={handleSyncAgency} disabled={loading}>
+            <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={handleSyncAgency} disabled={loading || filters.agency === "all"}>
               <RefreshCw size={18} /> Sincronizar organismo
             </button>
             <button className="inline-flex min-h-11 items-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={exportCsv}>
@@ -191,7 +191,7 @@ export function App() {
           <div className="flex flex-col gap-1 border-b border-line p-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-xl font-black">Resultados</h2>
-              <p className="text-sm text-muted" aria-live="polite">{loading ? "Cargando..." : `${data.total} compras encontradas`}</p>
+              <p className="text-sm text-muted" aria-live="polite">{loading ? "Cargando..." : `${data.total} compras encontradas${filters.agency === "all" ? "" : ` para ${filters.agency}`}`}</p>
             </div>
           </div>
           <div className="overflow-x-auto">
