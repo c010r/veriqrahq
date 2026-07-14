@@ -47,6 +47,11 @@ export type OfficialCatalogResponse = {
   resources: OfficialCatalogResource[];
 };
 
+export type ImportResult = {
+  imported: number;
+  updated: number;
+};
+
 export type Filters = {
   query: string;
   status: string;
@@ -78,7 +83,7 @@ export async function fetchOfficialCatalog(): Promise<OfficialCatalogResponse> {
   return response.json();
 }
 
-export async function importFile(file: File): Promise<void> {
+export async function importFile(file: File): Promise<ImportResult> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("source", "ARCE");
@@ -87,9 +92,10 @@ export async function importFile(file: File): Promise<void> {
     body: formData
   });
   if (!response.ok) throw new Error("No se pudo importar el archivo.");
+  return response.json();
 }
 
-export async function syncUrl(url: string): Promise<void> {
+export async function syncUrl(url: string): Promise<ImportResult> {
   const formData = new FormData();
   formData.append("url", url);
   const response = await fetch(`${API_BASE}/api/purchases/sync-url`, {
@@ -97,4 +103,18 @@ export async function syncUrl(url: string): Promise<void> {
     body: formData
   });
   if (!response.ok) throw new Error("No se pudo sincronizar la URL.");
+  return response.json();
+}
+
+
+export async function syncOfficialPurchases(options: { inciso?: string; tipo_pub?: string } = {}): Promise<ImportResult> {
+  const formData = new FormData();
+  formData.append("inciso", options.inciso ?? "29");
+  formData.append("tipo_pub", options.tipo_pub ?? "VIG");
+  const response = await fetch(`${API_BASE}/api/purchases/sync-official`, {
+    method: "POST",
+    body: formData
+  });
+  if (!response.ok) throw new Error("No se pudo sincronizar el RSS oficial de ARCE.");
+  return response.json();
 }

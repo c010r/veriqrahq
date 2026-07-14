@@ -10,6 +10,20 @@ from app.services.purchase_service import distinct_values, list_purchases, metri
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 
+ARCE_RSS_BASE = "https://www.comprasestatales.gub.uy/consultas/rss"
+ARCE_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+
+def official_arce_rss_url(tipo_pub: str, inciso: str) -> str:
+    clean_tipo_pub = tipo_pub.strip().upper()
+    clean_inciso = inciso.strip()
+    if clean_tipo_pub not in {"VIG", "ADJ"}:
+        raise HTTPException(status_code=400, detail="Tipo de publicacion ARCE no soportado.")
+    if not clean_inciso.isdigit():
+        raise HTTPException(status_code=400, detail="El inciso ARCE debe ser numerico.")
+    return f"{ARCE_RSS_BASE}/tipo-pub/{clean_tipo_pub}/inciso/{clean_inciso}"
+
+
 
 @router.get("", response_model=PurchaseList)
 def get_purchases(
@@ -38,9 +52,11 @@ def get_purchases(
 def get_catalogs(db: Session = Depends(get_db)) -> dict[str, list[str]]:
     official_agencies = labels_for(db, "incisos")
     official_procedure_types = labels_for(db, "tipos_compra")
+    agencies = sorted(set(official_agencies) | set(distinct_values(db, "agency")))
+    procedure_types = sorted(set(official_procedure_types) | set(distinct_values(db, "procedure_type")))
     return {
-        "agencies": official_agencies or distinct_values(db, "agency"),
-        "procedure_types": official_procedure_types or distinct_values(db, "procedure_type"),
+        "agencies": agencies,
+        "procedure_types": procedure_types,
         "statuses": ["vigente", "anterior"],
     }
 
@@ -67,7 +83,7 @@ async def sync_url(
 ) -> ImportResult:
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(url)
+            response = await client.get(url, headers=ARCE_HEADERS)
             response.raise_for_status()
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=400, detail=f"No se pudo obtener la fuente ARCE: {exc}") from exc
@@ -77,5 +93,24 @@ async def sync_url(
         purchases = parse_csv(response.text, source=url)
     else:
         purchases = parse_xml(response.text, source=url)
+    imported, updated = upsert_purchases(db, purchases)
+    return ImportResult(imported=imported, updated=updated)
+
+
+@router.post("/sync-official", response_model=ImportResult)
+async def sync_official(
+    db: Session = Depends(get_db),
+    inciso: str = Form(default="29"),
+    tipo_pub: str = Form(default="VIG"),
+) -> ImportResult:
+    url = official_arce_rss_url(tipo_pub, inciso)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.get(url, headers=ARCE_HEADERS)
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=400, detail=f"No se pudo obtener el RSS oficial ARCE: {exc}") from exc
+
+    purchases = parse_xml(response.text, source=url)
     imported, updated = upsert_purchases(db, purchases)
     return ImportResult(imported=imported, updated=updated)

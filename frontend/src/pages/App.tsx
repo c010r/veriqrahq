@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileUp, RefreshCw, Search } from "lucide-react";
-import { Catalogs, Filters, OfficialCatalogResource, Purchase, PurchaseResponse, fetchCatalogs, fetchOfficialCatalog, fetchPurchases, importFile, syncUrl } from "../lib/api";
+import { Catalogs, Filters, OfficialCatalogResource, Purchase, PurchaseResponse, fetchCatalogs, fetchOfficialCatalog, fetchPurchases, importFile, syncOfficialPurchases, syncUrl } from "../lib/api";
 
 const emptyResponse: PurchaseResponse = {
   items: [],
@@ -17,6 +17,8 @@ const defaultFilters: Filters = {
   agency: "all",
   procedure_type: "all"
 };
+
+const ASSE_AGENCY = "Administración de Servicios de Salud del Estado";
 
 function money(value: string | number, currency = "UYU") {
   return new Intl.NumberFormat("es-UY", {
@@ -100,9 +102,22 @@ export function App() {
     if (!nextUrl) return;
     setStatus("Sincronizando URL oficial...");
     try {
-      await syncUrl(nextUrl);
-      setStatus("Sincronizacion finalizada.");
+      const result = await syncUrl(nextUrl);
+      setStatus(`Sincronizacion finalizada: ${result.imported} nuevos, ${result.updated} actualizados.`);
       await reload();
+    } catch (error) {
+      setStatus(errorMessage(error));
+    }
+  }
+
+  async function handleSyncAsse() {
+    setStatus("Sincronizando llamados vigentes de ASSE desde ARCE...");
+    try {
+      const result = await syncOfficialPurchases({ inciso: "29", tipo_pub: "VIG" });
+      const asseFilters = { ...filters, status: "vigente", agency: ASSE_AGENCY };
+      setFilters(asseFilters);
+      setStatus(`ASSE vigente sincronizado: ${result.imported} nuevos, ${result.updated} actualizados.`);
+      await reload(asseFilters);
     } catch (error) {
       setStatus(errorMessage(error));
     }
@@ -176,9 +191,14 @@ export function App() {
               URL XML/RSS
               <input id="remote-url" name="url" className="min-h-11 rounded-md border border-line px-3 text-ink" type="url" value={remoteUrl} onChange={(event) => setRemoteUrl(event.target.value)} placeholder="https://..." required />
             </label>
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 font-bold text-white" type="submit">
-              <RefreshCw size={18} /> Sincronizar
-            </button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 font-bold text-white" type="submit">
+                <RefreshCw size={18} /> Sincronizar URL
+              </button>
+              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent bg-white px-4 py-2 font-bold text-accent" type="button" onClick={handleSyncAsse} disabled={loading}>
+                <RefreshCw size={18} /> ASSE vigentes
+              </button>
+            </div>
             <p className="text-sm text-muted" role="status" aria-live="polite">{status}</p>
           </form>
         </section>
